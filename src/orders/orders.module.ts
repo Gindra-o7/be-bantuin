@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -26,7 +26,8 @@ import { PaymentsModule } from 'src/payments/payments.module';
  * - Audit trail untuk semua perubahan status
  */
 @Module({
-  imports: [PrismaModule, PaymentsModule],
+  // Gunakan forwardRef untuk menghindari circular dependency dengan PaymentsModule
+  imports: [PrismaModule, forwardRef(() => PaymentsModule)],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService], // Export untuk digunakan di modules lain (Reviews, Disputes)
