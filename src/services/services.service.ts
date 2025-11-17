@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type {
   CreateServiceDto,
   UpdateServiceDto,
-  ServiceFilterDto,
+  ServiceFilterType,
 } from './dto/service.dto';
 import { Prisma } from '@prisma/client';
 
@@ -81,7 +81,7 @@ export class ServicesService {
   /**
    * Get all services with filtering and pagination
    */
-  async findAll(filters: ServiceFilterDto) {
+  async findAll(filters: ServiceFilterType) {
     const {
       q,
       category,

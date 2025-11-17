@@ -1,3 +1,4 @@
+import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 // Schema for creating a new service
@@ -56,31 +57,26 @@ export const UpdateServiceSchema = CreateServiceSchema.partial();
 
 // Schema for filtering/searching services
 export const ServiceFilterSchema = z.object({
-  q: z.string().optional(), // Search query
+  q: z.string().optional(),
   category: z
     .enum([
-      'DESIGN',
-      'DATA',
-      'CODING',
-      'WRITING',
-      'EVENT',
-      'TUTOR',
-      'TECHNICAL',
-      'OTHER',
+      // ...
     ])
     .optional(),
-  priceMin: z.number().positive().optional(),
-  priceMax: z.number().positive().optional(),
-  ratingMin: z.number().min(0).max(5).optional(),
+  priceMin: z.coerce.number().positive().optional(), // <-- UBAH DI SINI
+  priceMax: z.coerce.number().positive().optional(), // <-- UBAH DI SINI
+  ratingMin: z.coerce.number().min(0).max(5).optional(), // <-- UBAH DI SINI
   sellerId: z.string().uuid().optional(),
-  page: z.number().int().positive().default(1),
-  limit: z.number().int().positive().max(50).default(12),
+  page: z.coerce.number().int().positive().default(1), // <-- UBAH DI SINI
+  limit: z.coerce.number().int().positive().max(50).default(12), // <-- UBAH DI SINI
   sortBy: z
     .enum(['newest', 'price_low', 'price_high', 'rating', 'popular'])
     .default('newest'),
 });
 
-// Type exports
-export type CreateServiceDto = z.infer<typeof CreateServiceSchema>;
-export type UpdateServiceDto = z.infer<typeof UpdateServiceSchema>;
-export type ServiceFilterDto = z.infer<typeof ServiceFilterSchema>;
+export class CreateServiceDto extends createZodDto(CreateServiceSchema) {}
+export class UpdateServiceDto extends createZodDto(UpdateServiceSchema) {}
+export class ServiceFilterDto extends createZodDto(ServiceFilterSchema) {}
+
+// Ekspor sebagai Tipe (untuk type-hinting di Service)
+export type ServiceFilterType = z.infer<typeof ServiceFilterSchema>;

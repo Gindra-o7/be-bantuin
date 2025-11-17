@@ -15,7 +15,7 @@ import { ServicesService } from './services.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import type {
+import {
   CreateServiceDto,
   UpdateServiceDto,
   ServiceFilterDto,
