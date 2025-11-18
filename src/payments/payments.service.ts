@@ -28,7 +28,7 @@ export class PaymentsService {
     this.snap = new midtransClient.Snap({
       isProduction: false, // Ganti ke true di production
       serverKey: this.midtransServerKey,
-      clientKey: this.configService.get<string>('MIDTRANS_CLIENT_KEY'),
+      clientKey: this.configService.get<string>('MIDTRANS_CLIENT_KEY')!,
     });
   }
 
@@ -41,7 +41,7 @@ export class PaymentsService {
       where: { orderId: order.id },
     });
 
-    if (existingPayment && existingPayment.status === 'pending') {
+    if (existingPayment && existingPayment.status === 'PENDING') {
       return {
         token: existingPayment.gatewayToken,
         redirectUrl: existingPayment.gatewayRedirectUrl,
@@ -74,18 +74,18 @@ export class PaymentsService {
       const { token, redirect_url } = transaction;
 
       // Simpan/Update payment record di DB
-      const payment = await this.prisma.payment.upsert({
+      await this.prisma.payment.upsert({
         where: { orderId: order.id },
         update: {
           amount: order.price,
-          status: 'pending',
+          status: 'PENDING',
           gatewayToken: token,
           gatewayRedirectUrl: redirect_url,
         },
         create: {
           orderId: order.id,
           amount: order.price,
-          status: 'pending',
+          status: 'PENDING',
           gatewayToken: token,
           gatewayRedirectUrl: redirect_url,
         },
@@ -102,15 +102,14 @@ export class PaymentsService {
    * Memproses Webhook dari Midtrans
    * PENTING: Idempotency & Signature Validation
    */
-  async handlePaymentWebhook(payload: any) {
-    const {
-      order_id,
-      transaction_status,
-      transaction_id,
-      status_code,
-      gross_amount,
-      signature_key,
-    } = payload;
+  async handlePaymentWebhook(payload: Record<string, unknown>) {
+    const order_id = payload.order_id as string;
+    const transaction_status = payload.transaction_status as string;
+    const transaction_id = payload.transaction_id as string;
+    const status_code = payload.status_code as string;
+    const gross_amount = payload.gross_amount as string;
+    const signature_key = payload.signature_key as string;
+    const payment_type = payload.payment_type as string;
 
     // 1. Verifikasi Signature Key (KEAMANAN KRITIS)
     const expectedSignature = this.verifySignature(
@@ -136,8 +135,8 @@ export class PaymentsService {
 
     // 3. Idempotency Check: Jika status sudah "settlement", jangan proses lagi
     if (
-      payment.status === 'settlement' &&
-      transaction_status === 'settlement'
+      payment.status === 'SETTLEMENT' &&
+      transaction_status === 'SETTLEMENT'
     ) {
       return { message: 'Payment already processed' };
     }
@@ -149,16 +148,16 @@ export class PaymentsService {
       transaction_status === 'settlement' ||
       transaction_status === 'capture'
     ) {
-      updatedStatus = 'settlement';
+      updatedStatus = 'SETTLEMENT';
     } else if (transaction_status === 'pending') {
-      updatedStatus = 'pending';
+      updatedStatus = 'PENDING';
     } else if (transaction_status === 'expire') {
-      updatedStatus = 'expire';
+      updatedStatus = 'EXPIRE';
     } else if (
       transaction_status === 'cancel' ||
       transaction_status === 'deny'
     ) {
-      updatedStatus = 'cancelled';
+      updatedStatus = 'CANCELLED';
     }
 
     await this.prisma.payment.update({
@@ -166,12 +165,12 @@ export class PaymentsService {
       data: {
         status: updatedStatus,
         transactionId: transaction_id,
-        paymentType: payload.payment_type,
+        paymentType: payment_type,
       },
     });
 
     // 5. PANCARKAN EVENT (Jika sukses)
-    if (updatedStatus === 'settlement') {
+    if (updatedStatus === 'SETTLEMENT') {
       // Daripada mengembalikan, kita pancarkan event
       this.eventEmitter.emit('payment.settled', {
         orderId: order_id,

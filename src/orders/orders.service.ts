@@ -6,16 +6,16 @@ import {
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
-import { WalletsService } from 'src/wallets/wallets.service';
+import { WalletsService } from '../wallets/wallets.service';
 import type {
   CreateOrderDto,
   DeliverOrderDto,
-  RequestRevisionDto,
   OrderFilterDto,
   CancelOrderDto,
+  RequestRevisionDto,
 } from './dto/order.dto';
-import { Prisma } from '@prisma/client';
-import { NotificationsService } from 'src/notifications/notifications.service';
+import { Order, Service, Prisma } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class OrdersService {
@@ -57,7 +57,7 @@ export class OrdersService {
       throw new NotFoundException('Jasa tidak ditemukan');
     }
 
-    if (!service.isActive || service.status !== 'active') {
+    if (!service.isActive || service.status !== 'ACTIVE') {
       throw new BadRequestException('Jasa tidak tersedia saat ini');
     }
 
@@ -95,7 +95,7 @@ export class OrdersService {
         requirements: dto.requirements,
         attachments: dto.attachments,
         dueDate,
-        status: 'draft',
+        status: 'DRAFT',
         isPaid: false,
         revisionCount: 0,
       },
@@ -132,14 +132,14 @@ export class OrdersService {
     orderId: string,
     buyerId: string,
   ): Promise<{
-    order: any;
+    order: Order;
     message: string;
     paymentToken: string;
     paymentRedirectUrl: string;
   }> {
     const order = await this.findOneWithAccess(orderId, buyerId, 'buyer');
 
-    if (order.status !== 'draft') {
+    if (order.status !== 'DRAFT') {
       throw new BadRequestException(
         'Hanya order dengan status draft yang bisa dikonfirmasi',
       );
@@ -148,7 +148,7 @@ export class OrdersService {
     // Update status ke waiting_payment
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: 'waiting_payment' },
+      data: { status: 'WAITING_PAYMENT' },
       include: {
         buyer: true,
       },
@@ -163,8 +163,8 @@ export class OrdersService {
     return {
       order: updated,
       message: 'Silakan lakukan pembayaran untuk melanjutkan pesanan',
-      paymentToken: paymentDetails.token,
-      paymentRedirectUrl: paymentDetails.redirectUrl,
+      paymentToken: paymentDetails.token!,
+      paymentRedirectUrl: paymentDetails.redirectUrl!,
     };
   }
 
@@ -177,7 +177,7 @@ export class OrdersService {
   @OnEvent('payment.settled')
   async handlePaymentSuccess(payload: {
     orderId: string;
-    transactionData: any;
+    transactionData: Record<string, unknown>;
   }) {
     const { orderId, transactionData } = payload;
 
@@ -198,21 +198,24 @@ export class OrdersService {
     try {
       await this.prisma.$transaction(async (tx) => {
         // Update order status
-        const updatedOrder = await tx.order.update({
+        await tx.order.update({
           where: { id: orderId },
           data: {
-            status: 'paid_escrow',
+            status: 'PAID_ESCROW',
             isPaid: true,
             paidAt: new Date(),
           },
         });
 
+        const txId = transactionData.transaction_id as string;
+        const pType = transactionData.payment_type as string;
+
         await tx.payment.update({
           where: { orderId: orderId },
           data: {
-            status: 'settlement',
-            transactionId: transactionData.transaction_id,
-            paymentType: transactionData.payment_type,
+            status: 'SETTLEMENT',
+            transactionId: txId,
+            paymentType: pType,
           },
         });
 
@@ -230,12 +233,11 @@ export class OrdersService {
         });
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error(
         `[PaymentSettled] Failed to process order ${orderId}:`,
-        error,
+        message,
       );
-      // Jika gagal, event ini perlu di-retry (bisa menggunakan queue/antrian)
-      // Untuk saat ini, kita log error-nya
     }
   }
 
@@ -259,7 +261,7 @@ export class OrdersService {
       throw new NotFoundException('Order tidak ditemukan');
     }
 
-    if (order.status !== 'paid_escrow') {
+    if (order.status !== 'PAID_ESCROW') {
       throw new BadRequestException(
         'Hanya order yang sudah dibayar yang bisa dimulai',
       );
@@ -267,7 +269,7 @@ export class OrdersService {
 
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: 'in_progress' },
+      data: { status: 'IN_PROGRESS' },
       include: {
         buyer: {
           select: {
@@ -303,7 +305,7 @@ export class OrdersService {
       throw new NotFoundException('Order tidak ditemukan');
     }
 
-    if (order.status !== 'in_progress' && order.status !== 'revision') {
+    if (order.status !== 'IN_PROGRESS' && order.status !== 'REVISION') {
       throw new BadRequestException(
         'Order harus dalam status dikerjakan atau revisi',
       );
@@ -312,7 +314,7 @@ export class OrdersService {
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: {
-        status: 'delivered',
+        status: 'DELIVERED',
         deliveryFiles: dto.deliveryFiles,
         deliveryNote: dto.deliveryNote,
         deliveredAt: new Date(),
@@ -346,7 +348,7 @@ export class OrdersService {
   ) {
     const order = await this.findOneWithAccess(orderId, buyerId, 'buyer');
 
-    if (order.status !== 'delivered') {
+    if (order.status !== 'DELIVERED') {
       throw new BadRequestException(
         'Revisi hanya bisa diminta setelah hasil dikirim',
       );
@@ -362,9 +364,12 @@ export class OrdersService {
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: {
-        status: 'revision',
+        status: 'REVISION',
         revisionCount: {
           increment: 1,
+        },
+        revisionNotes: {
+          push: dto.revisionNote,
         },
       },
     });
@@ -387,73 +392,13 @@ export class OrdersService {
   async approveWork(orderId: string, buyerId: string) {
     const order = await this.findOneWithAccess(orderId, buyerId, 'buyer');
 
-    if (order.status !== 'delivered') {
+    if (order.status !== 'DELIVERED') {
       throw new BadRequestException(
         'Hanya hasil yang sudah dikirim yang bisa disetujui',
       );
     }
 
-    // Gunakan transaction untuk atomicity
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Update order status
-      const completedOrder = await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'completed',
-          completedAt: new Date(),
-        },
-        include: {
-          service: true,
-        },
-      });
-
-      // Update statistik service
-      await tx.service.update({
-        where: { id: completedOrder.serviceId },
-        data: {
-          totalOrders: {
-            increment: 1,
-          },
-        },
-      });
-
-      // Update statistik seller
-      await tx.user.update({
-        where: { id: completedOrder.service.sellerId },
-        data: {
-          totalOrdersCompleted: {
-            increment: 1,
-          },
-        },
-      });
-
-      // TODO: Release escrow
-      const sellerWallet = await tx.wallet.findUniqueOrThrow({
-        where: { userId: completedOrder.service.sellerId },
-      });
-
-      // Hitung fee platform (misal 10%)
-      const orderPrice = completedOrder.price.toNumber();
-      const platformFee = orderPrice * 0.1; // 10% fee
-      const amountToSeller = orderPrice - platformFee;
-
-      // Gunakan WalletService untuk mencatat transaksi
-      await this.walletService.createTransaction({
-        tx,
-        walletId: sellerWallet.id,
-        orderId: completedOrder.id,
-        type: 'ESCROW_RELEASE',
-        amount: amountToSeller, // Positif
-        description: `Pelepasan dana untuk order #${completedOrder.id.substring(0, 8)}`,
-      });
-
-      return completedOrder;
-    });
-
-    // TODO: Kirim notifikasi ke seller tentang penyelesaian
-    // TODO: Kirim reminder ke buyer untuk memberikan review
-
-    return result;
+    return this.completeOrder(orderId, order.service.sellerId);
   }
 
   /**
@@ -469,7 +414,7 @@ export class OrdersService {
     userId: string,
     role: 'buyer' | 'seller',
     dto: CancelOrderDto,
-  ) {
+  ): Promise<Order & { refunded: boolean }> {
     const order = await this.prisma.order.findFirst({
       where: {
         id: orderId,
@@ -493,7 +438,7 @@ export class OrdersService {
 
     // Jika order sudah dibayar, perlu refund
     const needsRefund = order.isPaid;
-    let cancelled;
+    let cancelled: Order;
 
     // Gunakan transaction jika perlu refund
     if (needsRefund) {
@@ -501,7 +446,7 @@ export class OrdersService {
         const cancelledOrder = await tx.order.update({
           where: { id: orderId },
           data: {
-            status: 'cancelled',
+            status: 'CANCELLED',
             cancelledAt: new Date(),
             cancellationReason: dto.reason,
           },
@@ -529,7 +474,7 @@ export class OrdersService {
       cancelled = await this.prisma.order.update({
         where: { id: orderId },
         data: {
-          status: 'cancelled',
+          status: 'CANCELLED',
           cancelledAt: new Date(),
           cancellationReason: dto.reason,
         },
@@ -688,7 +633,7 @@ export class OrdersService {
     orderId: string,
     userId: string,
     requiredRole: 'buyer' | 'seller',
-  ) {
+  ): Promise<Order & { service: Service }> {
     const order = await this.prisma.order.findFirst({
       where: {
         id: orderId,
@@ -706,5 +651,60 @@ export class OrdersService {
     }
 
     return order;
+  }
+
+  /**
+   * [BARU] Helper terpusat untuk menyelesaikan order & melepas dana
+   * Dipanggil oleh approveWork (buyer) atau resolveDispute (admin)
+   */
+  async completeOrder(orderId: string, sellerId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const completedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: 'COMPLETED', // (Gunakan Enum)
+          completedAt: new Date(),
+        },
+        include: {
+          service: true,
+        },
+      });
+
+      // 1. Update statistik service
+      await tx.service.update({
+        where: { id: completedOrder.serviceId },
+        data: {
+          totalOrders: { increment: 1 },
+        },
+      });
+
+      // 2. Update statistik seller
+      await tx.user.update({
+        where: { id: sellerId },
+        data: {
+          totalOrdersCompleted: { increment: 1 },
+        },
+      });
+
+      // 3. Lepas dana (Escrow Release)
+      const sellerWallet = await tx.wallet.findUniqueOrThrow({
+        where: { userId: sellerId },
+      });
+
+      const orderPrice = completedOrder.price.toNumber();
+      const platformFee = orderPrice * 0.1; // 10% fee
+      const amountToSeller = orderPrice - platformFee;
+
+      await this.walletService.createTransaction({
+        tx,
+        walletId: sellerWallet.id,
+        orderId: completedOrder.id,
+        type: 'ESCROW_RELEASE', // (Gunakan Enum)
+        amount: amountToSeller,
+        description: `Pelepasan dana untuk order #${completedOrder.id.substring(0, 8)}`,
+      });
+
+      return completedOrder;
+    });
   }
 }

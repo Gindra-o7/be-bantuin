@@ -1,12 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WalletsController } from './wallets.controller';
+import { WalletsService } from './wallets.service';
 
 describe('WalletsController', () => {
   let controller: WalletsController;
 
+  const mockWalletsService = {};
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [WalletsController],
+      providers: [{ provide: WalletsService, useValue: mockWalletsService }],
     }).compile();
 
     controller = module.get<WalletsController>(WalletsController);

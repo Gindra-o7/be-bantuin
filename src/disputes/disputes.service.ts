@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateDisputeDto } from './dto/create-dispute.dto';
 import type { AddDisputeMessageDto } from './dto/add-message.dto';
-import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class DisputesService {
@@ -52,7 +52,7 @@ export class DisputesService {
       // Update status order menjadi 'disputed'
       await tx.order.update({
         where: { id: orderId },
-        data: { status: 'disputed' },
+        data: { status: 'DISPUTED' },
       });
 
       // Buat entri dispute

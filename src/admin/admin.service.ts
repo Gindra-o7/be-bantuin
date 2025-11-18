@@ -4,9 +4,10 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { WalletsService } from 'src/wallets/wallets.service';
-import type { ResolveDisputeDto } from 'src/disputes/dto/resolve-dispute.dto';
-import { NotificationsService } from 'src/notifications/notifications.service';
+import { WalletsService } from '../wallets/wallets.service';
+import { OrdersService } from '../orders/orders.service';
+import type { ResolveDisputeDto } from '../disputes/dto/resolve-dispute.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AdminService {
@@ -14,6 +15,7 @@ export class AdminService {
     private prisma: PrismaService,
     private walletService: WalletsService,
     private notificationService: NotificationsService,
+    private ordersService: OrdersService,
   ) {}
 
   /**
@@ -21,7 +23,7 @@ export class AdminService {
    */
   async getPendingPayouts() {
     return this.prisma.payoutRequest.findMany({
-      where: { status: 'pending' },
+      where: { status: 'PENDING' },
       orderBy: { requestedAt: 'asc' },
       include: {
         user: {
@@ -40,7 +42,7 @@ export class AdminService {
     const payout = await this.prisma.payoutRequest.update({
       where: { id: payoutId },
       data: {
-        status: 'completed',
+        status: 'COMPLETED',
         processedAt: new Date(),
         adminNotes: 'Disetujui dan telah diproses.',
       },
@@ -49,7 +51,7 @@ export class AdminService {
     // Buat notifikasi untuk Seller
     await this.notificationService.create({
       userId: payout.userId,
-      content: `Penarikan dana Anda sebesar Rp ${payout.amount} telah disetujui.`,
+      content: `Penarikan dana Anda sebesar Rp ${payout.amount.toNumber()} telah disetujui.`,
       link: `/wallet/payouts`,
       type: 'WALLET',
     });
@@ -67,7 +69,7 @@ export class AdminService {
     if (!payout) {
       throw new NotFoundException('Permintaan penarikan tidak ditemukan');
     }
-    if (payout.status !== 'pending') {
+    if (payout.status !== 'PENDING') {
       throw new BadRequestException(
         `Permintaan ini sudah berstatus ${payout.status}`,
       );
@@ -79,7 +81,7 @@ export class AdminService {
       const rejectedPayout = await tx.payoutRequest.update({
         where: { id: payoutId },
         data: {
-          status: 'rejected',
+          status: 'REJECTED',
           processedAt: new Date(),
           adminNotes: reason,
         },
@@ -167,6 +169,36 @@ export class AdminService {
 
       const sellerId = dispute.order.service.sellerId;
       const buyerId = dispute.order.buyerId;
+
+      // --- PERBAIKAN LOGIKA BISNIS YANG HILANG ---
+      if (dto.resolution === 'REFUND_TO_BUYER') {
+        // 1. Update status order
+        await tx.order.update({
+          where: { id: dispute.orderId },
+          data: { status: 'RESOLVED' },
+        });
+
+        // 2. Proses Refund ke Wallet Buyer
+        const buyerWallet = await tx.wallet.findUniqueOrThrow({
+          where: { userId: buyerId },
+        });
+        await this.walletService.createTransaction({
+          tx,
+          walletId: buyerWallet.id,
+          orderId: dispute.orderId,
+          type: 'DISPUTE_REFUND',
+          amount: dispute.order.price.toNumber(), // Refund penuh
+          description: `Refund sengketa order #${dispute.orderId.substring(0, 8)}`,
+        });
+      } else if (dto.resolution === 'RELEASE_TO_SELLER') {
+        // 1. Selesaikan order menggunakan logika terpusat
+        // Ini akan update status order, update statistik, & melepas dana
+        await this.ordersService.completeOrder(dispute.orderId, sellerId);
+
+        // 2. (Opsional) Ganti tipe transaksi wallet agar spesifik
+        // Kita bisa tambahkan logic di completeOrder untuk menerima tipe
+        // Tapi untuk saat ini, ini sudah 100% fungsional
+      }
 
       // Buat notifikasi untuk Buyer
       await this.notificationService.createInTx(tx, {
