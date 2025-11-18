@@ -8,12 +8,11 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Enable CORS - hanya dari FRONTEND_URL
-  const frontendUrl = configService.get<string>('FRONTEND_URL');
-  if (!frontendUrl) {
-    throw new Error('FRONTEND_URL is not defined in environment variables');
-  }
   app.enableCors({
-    origin: frontendUrl,
+    origin: [
+      configService.get<string>('FRONTEND_URL'),
+      configService.get<string>('PRODUCTION_FRONTEND_URL'),
+    ],
     credentials: true,
   });
 
