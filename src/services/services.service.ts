@@ -244,11 +244,6 @@ export class ServicesService {
       throw new NotFoundException('Jasa tidak ditemukan');
     }
 
-    // Check if service is active
-    if (!service.isActive || service.status !== 'ACTIVE') {
-      throw new NotFoundException('Jasa tidak tersedia');
-    }
-
     return service;
   }
 
