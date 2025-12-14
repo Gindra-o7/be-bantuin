@@ -105,12 +105,9 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   logout() {
-    // Guard sudah memastikan user terautentikasi.
-    // Jika logic logout tidak butuh data user, hapus saja.
     return {
       statusCode: 200,
       message: 'Logged out successfully',
-      note: 'Tokens expire automatically after 45 minutes.',
     };
   }
 
