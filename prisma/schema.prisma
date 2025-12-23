@@ -50,6 +50,8 @@ model User {
   services                 Service[]                 @relation("SellerServices")
   wallet                   Wallet?
 
+  termsAcceptedAt DateTime?
+
   @@map("users")
 }
 
