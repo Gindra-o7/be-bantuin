@@ -3,9 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 model User {
@@ -49,6 +47,7 @@ model User {
   reviews                  Review[]                  @relation("ReviewAuthor")
   services                 Service[]                 @relation("SellerServices")
   wallet                   Wallet?
+  termsAcceptedAt          DateTime?
 
   termsAcceptedAt DateTime?
 

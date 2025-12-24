@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 import * as Sentry from '@sentry/nestjs';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -46,6 +47,37 @@ async function bootstrap() {
     tracesSampleRate: 1.0,
   });
 
+  app.use(
+    helmet({
+      frameguard: {
+        action: 'sameorigin', // atau 'deny'
+      },
+      xssFilter: true,
+      noSniff: true,
+      hidePoweredBy: true,
+      referrerPolicy: {
+        policy: 'no-referrer',
+      },
+      hsts: {
+        maxAge: 31536000, // 1 tahun
+        includeSubDomains: true,
+        preload: true,
+      },
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'default-src': ["'self'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'img-src': ["'self'", 'data:'],
+          'font-src': ["'self'"],
+          'connect-src': ["'self'"],
+          'frame-ancestors': ["'self'"],
+        },
+      },
+    }),
+  );
+
   // Enable CORS Dinamis (FIXED TYPE SAFE)
   app.enableCors({
     origin: (
@@ -65,7 +97,8 @@ async function bootstrap() {
         origin.startsWith('http://localhost') ||
         origin.includes('.ngrok-free.dev') ||
         origin.includes('.ngrok.io') ||
-        origin.includes('.vercel.app')
+        origin.includes('.vercel.app') ||
+        origin.includes('https://api.bantuin-campus.me')
       ) {
         callback(null, true);
       } else {
