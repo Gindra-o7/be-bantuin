@@ -70,15 +70,15 @@ export const CreateServiceSchema = z.object({
   // Pricing Details
   pricingType: z
     .enum([
-      'FIXED',        // Harga tetap (desain logo, jasa event, dll)
-      'PER_PAGE',     // Per halaman (ketik, translate dokumen)
-      'PER_WORD',     // Per kata (proofreading, translate)
-      'PER_HOUR',     // Per jam (tutor, konsultasi)
-      'PER_ITEM',     // Per item (edit foto, desain banner)
-      'PER_MINUTE',   // Per menit (edit video, voice over)
+      'FIXED', // Harga tetap (desain logo, jasa event, dll)
+      'PER_PAGE', // Per halaman (ketik, translate dokumen)
+      'PER_WORD', // Per kata (proofreading, translate)
+      'PER_HOUR', // Per jam (tutor, konsultasi)
+      'PER_ITEM', // Per item (edit foto, desain banner)
+      'PER_MINUTE', // Per menit (edit video, voice over)
       'PER_QUESTION', // Per soal (jasa jawab soal, kerjakan tugas)
-      'PER_SLIDE',    // Per slide (PPT design)
-      'CUSTOM',       // Custom pricing (dijelaskan di description)
+      'PER_SLIDE', // Per slide (PPT design)
+      'CUSTOM', // Custom pricing (dijelaskan di description)
     ])
     .optional()
     .describe('Tipe pricing sesuai jenis jasa'),
@@ -105,7 +105,7 @@ export const CreateServiceSchema = z.object({
 
   whatsIncluded: z
     .string()
-    .max(1000, { message: 'What\'s included maksimal 1000 karakter' })
+    .max(1000, { message: "What's included maksimal 1000 karakter" })
     .optional()
     .describe('Apa yang didapat customer'),
 
@@ -174,9 +174,9 @@ export const ServiceFilterSchema = z.object({
     .default('newest'),
 });
 
-export class CreateServiceDto extends createZodDto(CreateServiceSchema) { }
-export class UpdateServiceDto extends createZodDto(UpdateServiceSchema) { }
-export class ServiceFilterDto extends createZodDto(ServiceFilterSchema) { }
+export class CreateServiceDto extends createZodDto(CreateServiceSchema) {}
+export class UpdateServiceDto extends createZodDto(UpdateServiceSchema) {}
+export class ServiceFilterDto extends createZodDto(ServiceFilterSchema) {}
 
 // Ekspor sebagai Tipe (untuk type-hinting di Service)
 export type ServiceFilterType = z.infer<typeof ServiceFilterSchema>;

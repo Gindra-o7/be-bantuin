@@ -49,8 +49,6 @@ model User {
   wallet                   Wallet?
   termsAcceptedAt          DateTime?
 
-  termsAcceptedAt DateTime?
-
   @@map("users")
 }
 
