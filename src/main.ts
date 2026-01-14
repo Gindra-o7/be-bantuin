@@ -10,6 +10,7 @@ import helmet from 'helmet';
 
 async function bootstrap() {
   const isProduction = process.env.NODE_ENV === 'production';
+
   const pinoLogger = pino({
     level: 'info',
     // Hapus pino-pretty di production
@@ -27,6 +28,7 @@ async function bootstrap() {
   });
 
   // Buat app
+
   const app = await NestFactory.create(AppModule, {
     logger: isProduction
       ? ['error', 'warn']
@@ -36,10 +38,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Morgan: log request standar
-  app.use(morgan('combined'));
+  // app.use(morgan('combined'));
 
   // PinoHttp: log request/response detail
-  app.use(pinoHttp({ logger: pinoLogger }));
+  // app.use(pinoHttp({  logger: pinoLogger }));
 
   // Sentry: notifikasi error
   Sentry.init({

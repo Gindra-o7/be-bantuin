@@ -309,6 +309,7 @@ export class UsersService {
 
     // 2. Generate OTP
     const otp = randomInt(100000, 999999).toString();
+    console.log(otp);
 
     // 3. Store OTP (expires in 5 minutes)
     this.otpStore.set(userId, {
@@ -377,7 +378,8 @@ export class UsersService {
 
     if (!stored) {
       throw new BadRequestException(
-        'Tidak ada permintaan verifikasi yang aktif');
+        'Tidak ada permintaan verifikasi yang aktif',
+      );
     }
 
     if (Date.now() > stored.expiresAt) {

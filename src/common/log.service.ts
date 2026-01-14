@@ -44,6 +44,16 @@ export class LogService {
     status?: string;
     details?: string;
   }) {
+    const userExists = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { id: true },
+    });
+
+    if (!userExists) {
+      console.warn(`Cannot create activity log: User ${data.userId} not found`);
+      return;
+    }
+
     await this.prisma.userActivityLog.create({
       data: {
         userId: data.userId,
